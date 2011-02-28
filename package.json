@@ -1,0 +1,25 @@
+{
+    "name" : "keyx",
+    "description" : "Algorithms and file formats for public key cryptography key exchange",
+    "version" : "0.0.1",
+    "repository" : {
+        "type" : "git",
+        "url" : "git://github.com/substack/node-keyx.git"
+    },
+    "main" : "./index.js",
+    "directories" : {
+        "lib" : ".",
+        "test" : "./test"
+    },
+    "scripts" : {
+        "test" : "expresso"
+    },
+    "author" : {
+        "name" : "James Halliday",
+        "email" : "mail@substack.net",
+        "url" : "http://substack.net"
+    },
+    "engines" : {
+        "node" : ">=0.4.0"
+    }
+}
