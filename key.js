@@ -18,9 +18,8 @@ function Key (keyData, format) {
     }
 }
 
-Key.pack = function (algorithm) {
-    var bufs = [].slice.call(arguments, 1)
-        .map(function (bigi) { return bigi.toBuffer('mpint') });
+Key.pack = function (algorithm, vars) {
+    var bufs = vars.map(function (bigi) { return bigi.toBuffer('mpint') });
     var packed = Buffers(bufs).slice();
     return new Key(packed, algorithm);
 };
@@ -49,29 +48,24 @@ Key.parse = function (body) {
 };
 
 Key.prototype.toString = function (encoding) {
-    return this.fields
-        .reduce(function (put, x) {
-            return put.put(x.toBuffer('mpint'))
-        }, Put().word32be(id.length).put(new Buffer(id)))
-        .buffer().toString(encoding || 'base64')
-    ;
+    return this.data.toString(encoding || 'base64')
 };
 
-Key.prototype.format = function (format, privOrPub, cols) {
+Key.prototype.format = function (format, aux) {
     var fmt = (format || 'ssh2').toLowerCase();
     if (fmt === 'ssh2') {
-        var p = (privOrPub || '').toUpperCase();
+        var p = (aux || '').toUpperCase();
         if (p !== 'PRIVATE' && p !== 'PUBLIC') {
             throw new Error('Must specify private or public for ssh2');
         }
         
         var algo = this.algorithm.toUpperCase();
+        if (algo === 'DSS') algo = 'DSA';
         
         var wrapped = [];
-        for (var i = 0; i < this.data.length; i += 64) {
-            wrapped.push(this.data.slice(
-                i, Math.min(this.data.length, i + 64)
-            ));
+        var data = this.data.toString('base64');
+        for (var i = 0; i < data.length; i += 64) {
+            wrapped.push(data.slice(i, i + 64));
         }
         
         return [
@@ -83,7 +77,8 @@ Key.prototype.format = function (format, privOrPub, cols) {
     else if (fmt === 'openssh') {
         var id = this.algorithm;
         if (id === 'dsa') id = 'dss';
-        return [ 'ssh-' + id, this.data, email || '' ].join(' ') + '\r\n';
+        var data = this.data.toString('base64');
+        return [ 'ssh-' + id, data, aux || '' ].join(' ') + '\r\n';
     }
     else throw new Error('Unrecognized format ' + format.toString());
 };
