@@ -31,8 +31,9 @@ Key.parse = function (body) {
             body
                 .toString()
                 .split('\n')
-                .slice(1,-2)
-                .filter(function (line) { return !line.match(/:/) })
+                .filter(function (line) {
+                    return line.match(/^\S+\s*$/)
+                })
                 .join('')
                 .replace(/\s+/g,'')
             , ssh2[1]
@@ -72,6 +73,7 @@ Key.prototype.format = function (format, aux) {
             [ '-----BEGIN', algo, p, 'KEY-----' ].join(' '),
             wrapped.join('\n'),
             [ '-----END', algo, p, 'KEY-----' ].join(' '),
+            ''
         ].join('\n');
     }
     else if (fmt === 'openssh') {

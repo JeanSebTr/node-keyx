@@ -40,7 +40,10 @@ exports.packParseKey = function () {
     
     var ssh2 = key.format('ssh2', 'private');
     var kssh2 = Key.parse(ssh2);
-    assert.eql(key.data, kssh2.data);
+    assert.eql(
+        key.data,
+        kssh2.data
+    );
     
     var openssh = key.format('openssh', 'moo@moo.com');
     var kopenssh = Key.parse(openssh);
