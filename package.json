@@ -16,6 +16,9 @@
         "buffers" : ">=0.0.1",
         "put" : ">=0.0.3"
     },
+    "devDependencies" : {
+        "expresso" : ">=0.6.0"
+    },
     "scripts" : {
         "test" : "expresso"
     },
