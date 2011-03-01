@@ -1,9 +1,43 @@
+var assert = require('assert');
+
 var bigint = require('bigint');
 var put = require('put');
-var assert = require('assert');
+var Hash = require('hashish');
+var Buffers = require('buffers');
 
 // Generate two primes p and q to the Digital Signature Standard (DSS)
 // http://www.itl.nist.gov/fipspubs/fip186.htm appendix 2.2
+
+var exports = module.exports = DSS;
+
+function DSS (fields) {
+    if (!(this instanceof DSS)) return new DSS(fields);
+    
+    this.fields = Hash.merge(fields, {
+        k : function (e) { return e.powm(ref.y, ref.p) },
+        f : fields.g.powm(fields.y, fields.p),
+    });
+}
+
+DSS.prototype.data = function (privPub) {
+    var p = (privPub || '').toUpperCase();
+    
+    if (p === 'PRIVATE') {
+        return this.fields.x.toBuffer().toString('base64');
+    }
+    else if (p === 'PUBLIC') {
+        var fields = this.fields;
+        return Buffers(exports.fields.public.map(function (name) {
+            return fields[name].toBuffer('mpint')
+        })).slice();
+    }
+    else throw new Error('Specify "private" or "public"')
+};
+
+exports.fields = {
+    public : [ 'p', 'q', 'g', 'y' ],
+    private : [ 'x' ],
+};
 
 exports.generate = function () {
     var q = bigint(2).pow(159).add(1).rand(bigint(2).pow(160)).nextPrime();
@@ -29,16 +63,6 @@ exports.generate = function () {
     
     var x = q.sub(1).rand().add(1); // private key
     var y = g.powm(x, p); // public key
-    var f = g.powm(y, p);
     
-    return {
-        // p, q, and g can be shared and re-used
-        p : p, q : q, g : g, y : y,
-        
-        session : function () {
-            return {
-                k : function (e) { return e.powm(y, p) },
-            };
-        },
-    };
+    return module.exports({ p : p, q : q, g : g, y : y, x : x });
 };

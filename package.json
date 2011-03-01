@@ -14,7 +14,8 @@
     "dependencies" : {
         "bigint" : ">=0.0.9",
         "buffers" : ">=0.0.1",
-        "put" : ">=0.0.3"
+        "put" : ">=0.0.3",
+        "hashish" : ">=0.0.2"
     },
     "devDependencies" : {
         "expresso" : ">=0.6.0"
@@ -29,5 +30,6 @@
     },
     "engines" : {
         "node" : ">=0.4.0"
-    }
+    },
+    "license" : "MIT/X11"
 }
