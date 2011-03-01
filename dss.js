@@ -1,45 +1,103 @@
 var assert = require('assert');
+var crypto = require('crypto');
 
-var bigint = require('bigint');
-var put = require('put');
 var Hash = require('hashish');
+var bigint = require('bigint');
+
 var Buffers = require('buffers');
+var Binary = require('binary');
+
+var Put = require('put');
+function pack (buf) {
+    return Put().word32be(buf.length).put(buf).buffer();
+}
+
+var Format = require('./format');
+
+var exports = module.exports = DSS;
+
+function DSS (keys) {
+    if (!(this instanceof DSS)) return new DSS(keys);
+    
+    if (!keys.public) throw new Error('Public key not specified');
+    if (!keys.private) throw new Error('Private key not specified');
+    
+    this.algorithm = 'dss';
+    this.keys = keys;
+    this.fields = { x : bigint.fromBuffer(keys.private) };
+    
+    var buffers = Binary.parse(keys.public)
+        .word32be('length.p').buffer('buffers.p', 'length.p')
+        .word32be('length.q').buffer('buffers.q', 'length.q')
+        .word32be('length.g').buffer('buffers.g', 'length.g')
+        .word32be('length.y').buffer('buffers.y', 'length.y')
+        .vars.buffers
+    ;
+    
+    'pqgy'.split('').forEach(function (name) {
+        this.fields[name] = bigint.fromBuffer(buffers[name]);
+    });
+    
+    if (!this.valid()) throw new Error('Public and private keys disagree');
+}
+
+DSS.fromFields = function (fields) {
+    var dss = Object.create(DSS.prototype);
+    
+    dss.fields = fields;
+    
+    var bufs = 'pqgy'.split('').map(function (name) {
+        return fields[name].toBuffer('mpint')
+    });
+    
+    var id = pack(new Buffer('ssh-dss'));
+    bufs.unshift(id);
+    
+    dss.keys = {
+        private : fields.x.toBuffer(),
+        public : Buffers(bufs).slice(),
+    };
+    
+    if (!dss.valid()) throw new Error('Invalid fields');
+    
+    return dss;
+}
+
+DSS.prototype.valid = function () {
+    var y = this.fields.g.powm(this.fields.x, this.fields.p);
+    return y.toString() === this.fields.y.toString();
+};
+
+DSS.prototype.challenge = function (ebuf, params) {
+    var e = bigint.fromBuffer(ebuf);
+    var K = e.powm(this.fields.y, this.fields.p).toBuffer('mpint');
+    var f = this.fields.g.powm(this.fields.y, this.fields.p).toBuffer('mpint');
+    
+    var K_S = pack(this.keys.public);
+    
+    var V_C = pack(params.client.ident);
+    var V_S = pack(params.server.ident);
+    var I_C = pack(params.client.kexinit);
+    var I_S = pack(params.server.kexinit);
+    
+    var sign = crypto.createSign('DSA');
+    
+    [ V_C, V_S, I_C, I_S, K_S, ebuf, f, K ]
+        .forEach(function (buf) { sign.update(buf) });
+    
+    var signed = new Buffer(sign.sign(this.keys.private, 'base64'), 'base64');
+    
+    return Buffers([ K_S, f.toBuffer('mpint'), signed ]).slice();
+};
+
+DSS.prototype.format = function (format, kt, email) {
+    return Format(format, this.keys, kt, email);
+};
 
 // Generate two primes p and q to the Digital Signature Standard (DSS)
 // http://www.itl.nist.gov/fipspubs/fip186.htm appendix 2.2
 
-var exports = module.exports = DSS;
-
-function DSS (fields) {
-    if (!(this instanceof DSS)) return new DSS(fields);
-    
-    this.fields = Hash.merge(fields, {
-        k : function (e) { return e.powm(ref.y, ref.p) },
-        f : fields.g.powm(fields.y, fields.p),
-    });
-}
-
-DSS.prototype.data = function (privPub) {
-    var p = (privPub || '').toUpperCase();
-    
-    if (p === 'PRIVATE') {
-        return this.fields.x.toBuffer().toString('base64');
-    }
-    else if (p === 'PUBLIC') {
-        var fields = this.fields;
-        return Buffers(exports.fields.public.map(function (name) {
-            return fields[name].toBuffer('mpint')
-        })).slice();
-    }
-    else throw new Error('Specify "private" or "public"')
-};
-
-exports.fields = {
-    public : [ 'p', 'q', 'g', 'y' ],
-    private : [ 'x' ],
-};
-
-exports.generate = function () {
+DSS.generate = function () {
     var q = bigint(2).pow(159).add(1).rand(bigint(2).pow(160)).nextPrime();
     var L = 512 + 64 * Math.floor(Math.random() * 8);
     
@@ -64,5 +122,5 @@ exports.generate = function () {
     var x = q.sub(1).rand().add(1); // private key
     var y = g.powm(x, p); // public key
     
-    return module.exports({ p : p, q : q, g : g, y : y, x : x });
+    return DSS({ p : p, q : q, g : g, y : y, x : x });
 };
