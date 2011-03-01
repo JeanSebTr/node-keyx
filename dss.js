@@ -44,6 +44,7 @@ function DSS (keys) {
 DSS.fromFields = function (fields) {
     var dss = Object.create(DSS.prototype);
     
+    dss.algorithm = 'dss';
     dss.fields = fields;
     
     var bufs = 'pqgy'.split('').map(function (name) {
@@ -90,8 +91,13 @@ DSS.prototype.challenge = function (ebuf, params) {
     return Buffers([ K_S, f.toBuffer('mpint'), signed ]).slice();
 };
 
-DSS.prototype.format = function (format, kt, email) {
-    return Format(format, this.keys, kt, email);
+DSS.prototype.key = function (kt) {
+    return {
+        data : this.keys[kt].toString('base64'),
+        format : (function (format, aux) {
+            return Format(format, this, kt, aux)
+        }).bind(this)
+    }
 };
 
 // Generate two primes p and q to the Digital Signature Standard (DSS)
@@ -122,5 +128,5 @@ DSS.generate = function () {
     var x = q.sub(1).rand().add(1); // private key
     var y = g.powm(x, p); // public key
     
-    return DSS({ p : p, q : q, g : g, y : y, x : x });
+    return DSS.fromFields({ p : p, q : q, g : g, y : y, x : x });
 };
