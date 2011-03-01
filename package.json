@@ -9,7 +9,8 @@
     "main" : "./index.js",
     "directories" : {
         "lib" : ".",
-        "test" : "./test"
+        "test" : "./test",
+        "example" : "./examples"
     },
     "dependencies" : {
         "bigint" : ">=0.0.9",
