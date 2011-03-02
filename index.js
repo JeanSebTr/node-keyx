@@ -4,17 +4,26 @@ var exports = module.exports = function (keys) {
     
     var pub = exports.parse(keys.public);
     if (!pub) throw new Error('Failed to parse public key');
+    if (!pub.keyType) pub.keyType = 'public';
     
     var priv = exports.parse(keys.private);
     if (!priv) throw new Error('Failed to parse private key');
+    if (!priv.keyType) pub.keyType = 'private';
     
-    if (pub.keyType != priv.keyType) throw new Error('key types disagree');
+    if (pub.algorithm !== priv.algorithm) {
+        throw new Error(
+            'key types '
+            + [ pub.keyType, priv.keyType ]
+                .map(String).map(JSON.stringify).join(' and ')
+            + ' disagree'
+        );
+    }
     
-    if (!algos[pub.keyType]) {
-        throw new Error('Unsupported key type ' + pub.keyType.toString());
+    if (!algos[pub.algorithm]) {
+        throw new Error('Unsupported key type ' + pub.algorithm.toString());
     }
      
-    return algos[pub.keyType]({ public : pub, private : priv });
+    return algos[pub.algorithm]({ public : pub, private : priv });
 };
 
 var algos = exports.algorithms = {
@@ -26,7 +35,9 @@ exports.generate = function (algo) {
     return algos[algo].generate();
 };
 
-exports.parse = function (body) {
+exports.parse = function (contents) {
+    var body = contents.toString();
+    
     var ssh2 = body.match(/^-----BEGIN (\S+) (PRIVATE|PUBLIC) KEY-----\n/);
     if (ssh2) {
         return {
