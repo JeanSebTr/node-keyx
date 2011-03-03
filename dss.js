@@ -75,7 +75,6 @@ DSS.prototype.valid = function () {
 };
 
 DSS.prototype.challenge = function (params) {
-console.dir(params);
     var e = bigint.fromBuffer(
         Binary.parse(params.client.kexinit)
             .skip(1)
@@ -98,18 +97,30 @@ console.dir(params);
     var I_C = pack(params.client.kexinit);
     var I_S = pack(params.server.kexinit);
     
-    var sign = crypto.createSign('DSA');
+    //var hash = crypto.createHash('SHA1');
+    var hash = crypto.createSign('DSA');
     
     [ V_C, V_S, I_C, I_S, K_S ].forEach(function (buf) {
-        sign.update(buf);
+        hash.update(buf);
     });
     
     [ e, f, K ].forEach(function (n) {
-        sign.update(n.toBuffer('mpint'));
+        hash.update(n.toBuffer('mpint'));
     });
     
-    var signed = sign.sign(this.keys.private, 'base64');
-    var H = pack(new Buffer(signed, 'base64'));
+    var signed = new Buffer(hash.sign(
+        this.key('private').format('ssh2'),
+        'base64'
+    ), 'base64');
+    
+    var buf = new Buffer(40);
+    signed.copy(buf);
+    var sig = pack(buf);
+    
+    //var H = pack(new Buffer(hash.digest('base64'), 'base64'));
+    var H = pack(Buffers([ pack(new Buffer('ssh-dss')), sig ]).slice());
+console.log(H);
+console.log(signed);
     
     return Buffers([
         new Buffer([ 31 ]), // SSH_MSG_KEXDH_REPLY
