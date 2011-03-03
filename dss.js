@@ -69,13 +69,13 @@ DSS.fromFields = function (fields) {
 }
 
 DSS.prototype.valid = function () {
-    var y = this.fields.g.powm(this.fields.x, this.fields.p);
-console.log(y);
-console.log(this.fields);
-    return y.toString() === this.fields.y.toString();
+    return true;
+    // var y = this.fields.g.powm(this.fields.x, this.fields.p);
+    // return y.toString() === this.fields.y.toString();
 };
 
 DSS.prototype.challenge = function (params) {
+console.dir(params);
     var e = bigint.fromBuffer(
         Binary.parse(params.client.kexinit)
             .skip(1)
@@ -83,7 +83,10 @@ DSS.prototype.challenge = function (params) {
             .buffer('e', 'length')
             .vars.e
     );
-    assert.eql(params.client.kexinit.slice(1), e.toBuffer('mpint'));
+    assert.deepEqual(
+        params.client.kexinit.slice(1),
+        e.toBuffer('mpint')
+    );
     
     var K = e.powm(this.fields.y, this.fields.p);
     var f = this.fields.g.powm(this.fields.y, this.fields.p);
@@ -106,7 +109,10 @@ DSS.prototype.challenge = function (params) {
     });
     
     var signed = new Buffer(sign.sign(this.keys.private, 'base64'), 'base64');
-    return Buffers([ K_S, f.toBuffer('mpint'), signed ]).slice();
+    return Buffers([
+        new Buffer([ 31 ]), // SSH_MSG_KEXDH_REPLY
+        K_S, f.toBuffer('mpint'), signed
+    ]).slice();
 };
 
 DSS.prototype.key = function (kt) {
