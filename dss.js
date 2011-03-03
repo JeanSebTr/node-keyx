@@ -108,10 +108,12 @@ console.dir(params);
         sign.update(n.toBuffer('mpint'));
     });
     
-    var signed = new Buffer(sign.sign(this.keys.private, 'base64'), 'base64');
+    var signed = sign.sign(this.keys.private, 'base64');
+    var H = pack(new Buffer(signed, 'base64'));
+    
     return Buffers([
         new Buffer([ 31 ]), // SSH_MSG_KEXDH_REPLY
-        K_S, f.toBuffer('mpint'), signed
+        K_S, f.toBuffer('mpint'), H
     ]).slice();
 };
 
