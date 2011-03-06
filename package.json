@@ -13,7 +13,7 @@
         "example" : "./examples"
     },
     "dependencies" : {
-        "bigint" : ">=0.0.9",
+        "bigint" : ">=0.0.11",
         "buffers" : ">=0.0.1",
         "put" : ">=0.0.3",
         "hashish" : ">=0.0.2"

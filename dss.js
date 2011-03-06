@@ -9,7 +9,12 @@ var Binary = require('binary');
 
 var Put = require('put');
 function pack (buf) {
-    return Put().word32be(buf.length).put(buf).buffer();
+    if (Buffer.isBuffer(buf)) {
+        return Put().word32be(buf.length).put(buf).buffer();
+    }
+    else {
+        return pack(new Buffer(buf.toString()));
+    }
 }
 
 var Format = require('./format');
@@ -69,63 +74,137 @@ DSS.fromFields = function (fields) {
 }
 
 DSS.prototype.valid = function () {
-    return true;
-    // var y = this.fields.g.powm(this.fields.x, this.fields.p);
-    // return y.toString() === this.fields.y.toString();
+    return true; // don't actually check >_<
+    var y = this.fields.g.powm(this.fields.x, this.fields.p);
+    return y.toString() === this.fields.y.toString();
 };
 
-DSS.prototype.challenge = function (params) {
+DSS.prototype.challenge = function (kexdh, params) {
+    var kexAlgo = params.choices.kex_algorithms.serverName;
+    var macAlgo = params.choices.mac_algorithms_server_to_client.serverName;
+    
+    if (kexAlgo != 'diffie-hellman-group1-sha1') {
+        throw new Error('Unsupported key exchange algorithm ' + kexAlgo);
+    }
+    
     var e = bigint.fromBuffer(
-        Binary.parse(params.client.kexinit)
+        Binary.parse(kexdh)
             .skip(1)
             .word32be('length')
             .buffer('e', 'length')
             .vars.e
     );
+    
     assert.deepEqual(
-        params.client.kexinit.slice(1),
-        e.toBuffer('mpint')
+        kexdh.slice(1), e.toBuffer('mpint'),
+        'mismatch in mpint parameter e identity operation'
     );
     
     var K = e.powm(this.fields.y, this.fields.p);
     var f = this.fields.g.powm(this.fields.y, this.fields.p);
     
-    var K_S = pack(this.keys.public);
+    function sha1 (buf) {
+        var b = crypto.createHash('sha1').update(buf).digest('base64');
+        return new Buffer(b, 'base64');
+    }
+    
+    var sign = (function () {
+        var p = this.fields.p;
+        var x = this.fields.x;
+        var g = this.fields.g;
+        var q = this.fields.q;
+        
+        var r = g.powm(K, p).mod(q);
+        assert.ok(r !== 0);
+        
+        return function sign (buf) {
+            if (!Buffer.isBuffer(buf)) throw new Error('not a buffer');
+            
+            var s = K.invertm(q)
+                .mul(
+                    bigint.fromBuffer(sha1(buf))
+                    .add(x.mul(r))
+                )
+                .mod(q)
+            ;
+            assert.ok(!s.eq(0));
+            
+            return Buffers([
+                r.toBuffer(),
+                s.toBuffer()
+            ]).slice();
+        };
+    }).call(this);
+    
+    var K_S = pack(Buffers([
+        pack('ssh-dss'),
+        this.fields.p.toBuffer('mpint'),
+        this.fields.q.toBuffer('mpint'),
+        this.fields.g.toBuffer('mpint'),
+        this.fields.y.toBuffer('mpint'),
+    ]).slice());
     
     var V_C = pack(params.client.ident);
     var V_S = pack(params.server.ident);
     var I_C = pack(params.client.kexinit);
     var I_S = pack(params.server.kexinit);
     
-    //var hash = crypto.createHash('SHA1');
-    var hash = crypto.createSign('DSA');
+    var H = sha1(Buffers([
+        V_C, V_S, I_C, I_S, K_S,
+        e.toBuffer('mpint'),
+        f.toBuffer('mpint'),
+        K.toBuffer('mpint'),
+    ]).slice());
     
-    [ V_C, V_S, I_C, I_S, K_S ].forEach(function (buf) {
-        hash.update(buf);
-    });
+    //*
+    var s = pack(Buffers([
+        pack('ssh-dss'),
+        pack(sign(H))
+    ]).slice());
+    //*/
     
-    [ e, f, K ].forEach(function (n) {
-        hash.update(n.toBuffer('mpint'));
-    });
-    
-    var signed = new Buffer(hash.sign(
-        this.key('private').format('ssh2'),
+    /*
+    var signed = new Buffer(
+        crypto.createSign('DSA')
+            .update(H)
+            .sign(this.key('private').format('ssh2'), 'base64')
+        ,
         'base64'
-    ), 'base64');
+    ).slice(0, 40);
     
-    var buf = new Buffer(40);
-    signed.copy(buf);
-    var sig = pack(buf);
+    console.log('-- signed --');
+console.log(signed.length);
+    console.log(signed);
+    console.log(sign(H));
+    console.log(' --- ');
     
-    //var H = pack(new Buffer(hash.digest('base64'), 'base64'));
-    var H = pack(Buffers([ pack(new Buffer('ssh-dss')), sig ]).slice());
-console.log(H);
-console.log(signed);
+    var s = pack(Buffers([
+        pack('ssh-dss'),
+        pack(signed)
+    ]).slice());
+    //*/
     
-    return Buffers([
-        new Buffer([ 31 ]), // SSH_MSG_KEXDH_REPLY
-        K_S, f.toBuffer('mpint'), H
-    ]).slice();
+    var seqNo = 0;
+    
+    return {
+        reply : Buffers([
+            new Buffer([ 31 ]), // SSH_MSG_KEXDH_REPLY
+            K_S, f.toBuffer('mpint'), s
+        ]).slice(),
+        mac : function (buf) { // the mac filter to use on packets
+            var b64 = crypto.createHmac(macAlgo, K.toBuffer())
+                .update(Put()
+                    .word32be(seqNo)
+                    .put(buf)
+                    .buffer()
+                )
+                .digest('base64')
+            ;
+            var b = new Buffer(b64, 'base64');
+            seqNo = (seqNo + 1) % Math.pow(256, 4);
+            return Put().word32be(b.length).put(b).buffer();
+        },
+    };
 };
 
 DSS.prototype.key = function (kt) {
