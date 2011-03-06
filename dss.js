@@ -74,7 +74,6 @@ DSS.fromFields = function (fields) {
 }
 
 DSS.prototype.valid = function () {
-    return true; // don't actually check >_<
     var y = this.fields.g.powm(this.fields.x, this.fields.p);
     return y.toString() === this.fields.y.toString();
 };
@@ -114,20 +113,29 @@ DSS.prototype.challenge = function (kexdh, params) {
         var g = this.fields.g;
         var q = this.fields.q;
         
-        var r = g.powm(K, p).mod(q);
-        assert.ok(r !== 0);
+        var y = this.fields.y; // public key
         
-        return function sign (buf) {
-            if (!Buffer.isBuffer(buf)) throw new Error('not a buffer');
+        var r = g.powm(K, p).mod(q);
+        assert.ok(r.lt(q) && r.gt(0));
+        
+        return function sign (M) {
+            if (!Buffer.isBuffer(M)) throw new Error('not a buffer');
             
             var s = K.invertm(q)
                 .mul(
-                    bigint.fromBuffer(sha1(buf))
+                    bigint.fromBuffer(sha1(M))
                     .add(x.mul(r))
                 )
                 .mod(q)
             ;
-            assert.ok(!s.eq(0));
+            assert.ok(s.lt(q) && s.gt(0));
+            
+            // verification that the client will do:
+            var w = s.invertm(q);
+            var u1 = bigint.fromBuffer(sha1(M)).mul(w).mod(q);
+            var u2 = r.mul(w).mod(q);
+            var v = g.powm(u1, p).mul(y.powm(u2, p)).mod(p).mod(q);
+            assert.ok(v.eq(r), v + ' != ' + r);
             
             return Buffers([
                 r.toBuffer(),
