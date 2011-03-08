@@ -1,4 +1,6 @@
 module.exports = function (format, keypair, kt, email) {
+    if (kt === 'priv') kt = 'private';
+    if (kt === 'pub') kt = 'public';
     if (kt !== 'private' && kt !== 'public') {
         throw new Error('Must specify private or public');
     }
