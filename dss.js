@@ -186,58 +186,8 @@ DSS.prototype.challenge = function (kexdh, params) {
             ;
             var b = new Buffer(b64, 'base64');
             
-            var B = 64;
-            var L = { md5 : 16, sha1 : 20 }[macAlgo];
-            var Kbuf = K.toBuffer();
-            var H = function (a, b) {
-                return new Buffer(
-                    crypto.createHash(macAlgo)
-                        .update(a)
-                        .update(b || new Buffer(0))
-                        .digest('base64')
-                    ,
-                    'base64'
-                );
-            }
-            
-            Kbuf = Kbuf.length > B ? H(Kbuf) : Kbuf;
-            
-            if (Kbuf.length != B) {
-                var cbuf = new Buffer(B);
-                Kbuf.copy(cbuf, 0);
-                
-                for (var i = cbuf.length; i < B; i++) {
-                    cbuf[i] = 0;
-                }
-                Kbuf = cbuf;
-            }
-            var Ki = bigint.fromBuffer(Kbuf);
-            
-            var ipadBuf = new Buffer(B);
-            var opadBuf = new Buffer(B);
-            for (var i = 0; i < B; i++) {
-                ipadBuf[i] = 0x36;
-                opadBuf[i] = 0x5c;
-            }
-            var ipad = bigint.fromBuffer(ipadBuf);
-            var opad = bigint.fromBuffer(opadBuf);
-            
-            var text = Put()
-                .word32be(seqNum)
-                .put(buf)
-                .buffer()
-            ;
-            
-            var hbuf = H(
-                Ki.xor(opad).toBuffer(),
-                H(Ki.xor(ipad).toBuffer(), text)
-            );
-            console.log('H = ' + hbuf.inspect());
-            console.log('b = ' + b.inspect());
-            
             seqNum = (seqNum + 1) % Math.pow(256, 4);
-            //return Put().word32be(b.length).put(b).buffer();
-            return Put().word32be(hbuf.length).put(hbuf).buffer();
+            return Put().word32be(b.length).put(b).buffer();
         },
     };
 };
