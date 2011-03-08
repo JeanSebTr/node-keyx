@@ -152,6 +152,11 @@ DSS.prototype.challenge = function (kexdh, params) {
     var I_C = pack(params.client.kexinit);
     var I_S = pack(params.server.kexinit);
     
+console.log('e = ' + e);
+console.log('p = ' + this.fields.p);
+    assert.ok(e.ge(1) && e.lt(this.fields.p));
+    assert.ok(f.ge(1) && f.lt(this.fields.p));
+    
     var H = sha1(Buffers([
         V_C, V_S, I_C, I_S, K_S,
         e.toBuffer('mpint'),
