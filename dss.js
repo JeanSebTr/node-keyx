@@ -21,14 +21,14 @@ var exports = module.exports = DSS;
 
 function DSS (keys) {
     if (!(this instanceof DSS)) return new DSS(keys);
-    if (!keys.public) throw new Error('Public key not specified');
-    if (!keys.private) throw new Error('Private key not specified');
+    if (!keys.pub) throw new Error('Public key not specified');
+    if (!keys.priv) throw new Error('Private key not specified');
     
     this.algorithm = 'dss';
     this.keys = keys;
-    this.fields = { x : bigint.fromBuffer(keys.private) };
+    this.fields = { x : bigint.fromBuffer(keys.priv) };
     
-    var buffers = Binary.parse(keys.public)
+    var buffers = Binary.parse(keys.pub)
         .word32be('length.id').buffer('buffers.id', 'length.id')
         .word32be('length.p').buffer('buffers.p', 'length.p')
         .word32be('length.q').buffer('buffers.q', 'length.q')
@@ -62,8 +62,8 @@ DSS.fromFields = function (fields) {
     bufs.unshift(id);
     
     dss.keys = {
-        private : fields.x.toBuffer(),
-        public : Buffers(bufs).slice(),
+        priv : fields.x.toBuffer(),
+        pub : Buffers(bufs).slice(),
     };
     
     if (!dss.valid()) throw new Error('Invalid fields');
@@ -153,9 +153,16 @@ DSS.prototype.challenge = function (kexdh, params) {
     var I_S = pack(params.server.kexinit);
     
 console.log('e = ' + e);
+console.log('f = ' + f);
 console.log('p = ' + this.fields.p);
-    assert.ok(e.ge(1) && e.lt(this.fields.p));
-    assert.ok(f.ge(1) && f.lt(this.fields.p));
+    assert.ok(
+        e.ge(1) && e.lt(this.fields.p),
+        '!(0 < e < p), key exchange fails!'
+    );
+    assert.ok(
+        f.ge(1) && f.lt(this.fields.p),
+        '0 < f < p, key exchange fails!'
+    );
     
     var H = sha1(Buffers([
         V_C, V_S, I_C, I_S, K_S,
@@ -211,7 +218,7 @@ DSS.prototype.key = function (kt) {
 
 DSS.generate = function () {
     var q = bigint(2).pow(159).add(1).rand(bigint(2).pow(160)).nextPrime();
-    var L = 512 + 64 * Math.floor(Math.random() * 8);
+    var L = 1024; // 512 + 64 * Math.floor(Math.random() * 8);
     
     do {
         var X = bigint(2).pow(L-1).add(1).rand(bigint(2).pow(L));

@@ -1,12 +1,12 @@
 var exports = module.exports = function (keys) {
-    if (!keys.public) throw new Error('Public key not specified');
-    if (!keys.private) throw new Error('Private key not specified');
+    if (!keys.pub) throw new Error('Public key not specified');
+    if (!keys.priv) throw new Error('Private key not specified');
     
-    var pub = exports.parse(keys.public);
+    var pub = exports.parse(keys.pub);
     if (!pub) throw new Error('Failed to parse public key');
     if (!pub.keyType) pub.keyType = 'public';
     
-    var priv = exports.parse(keys.private);
+    var priv = exports.parse(keys.priv);
     if (!priv) throw new Error('Failed to parse private key');
     if (!priv.keyType) pub.keyType = 'private';
     
@@ -24,8 +24,8 @@ var exports = module.exports = function (keys) {
     }
     
     return algos[pub.algorithm]({
-        public : new Buffer(pub.data, 'base64'),
-        private : new Buffer(priv.data, 'base64'),
+        pub : new Buffer(pub.data, 'base64'),
+        priv : new Buffer(priv.data, 'base64'),
     });
 };
 
