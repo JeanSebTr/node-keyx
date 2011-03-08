@@ -1,9 +1,7 @@
 var assert = require('assert');
 var crypto = require('crypto');
 
-var Hash = require('hashish');
 var bigint = require('bigint');
-
 var Buffers = require('buffers');
 var Binary = require('binary');
 
@@ -137,10 +135,7 @@ DSS.prototype.challenge = function (kexdh, params) {
             var v = g.powm(u1, p).mul(y.powm(u2, p)).mod(p).mod(q);
             assert.ok(v.eq(r), v + ' != ' + r);
             
-            return Buffers([
-                r.toBuffer(),
-                s.toBuffer()
-            ]).slice();
+            return Buffers([ r.toBuffer(), s.toBuffer() ]).slice();
         };
     }).call(this);
     
@@ -164,53 +159,85 @@ DSS.prototype.challenge = function (kexdh, params) {
         K.toBuffer('mpint'),
     ]).slice());
     
-    //*
-    var s = pack(Buffers([
+    var signed = pack(Buffers([
         pack('ssh-dss'),
         pack(sign(H))
     ]).slice());
-    //*/
-    
-    /*
-    var signed = new Buffer(
-        crypto.createSign('DSA')
-            .update(H)
-            .sign(this.key('private').format('ssh2'), 'base64')
-        ,
-        'base64'
-    ).slice(0, 40);
     
     console.log('-- signed --');
-console.log(signed.length);
     console.log(signed);
-    console.log(sign(H));
     console.log(' --- ');
     
-    var s = pack(Buffers([
-        pack('ssh-dss'),
-        pack(signed)
-    ]).slice());
-    //*/
-    
-    var seqNo = 0;
+    var seqNum = 0;
     
     return {
         reply : Buffers([
             new Buffer([ 31 ]), // SSH_MSG_KEXDH_REPLY
-            K_S, f.toBuffer('mpint'), s
+            K_S, f.toBuffer('mpint'), signed
         ]).slice(),
         mac : function (buf) { // the mac filter to use on packets
             var b64 = crypto.createHmac(macAlgo, K.toBuffer())
                 .update(Put()
-                    .word32be(seqNo)
+                    .word32be(seqNum)
                     .put(buf)
                     .buffer()
                 )
                 .digest('base64')
             ;
             var b = new Buffer(b64, 'base64');
-            seqNo = (seqNo + 1) % Math.pow(256, 4);
-            return Put().word32be(b.length).put(b).buffer();
+            
+            var B = 64;
+            var L = { md5 : 16, sha1 : 20 }[macAlgo];
+            var Kbuf = K.toBuffer();
+            var H = function (a, b) {
+                return new Buffer(
+                    crypto.createHash(macAlgo)
+                        .update(a)
+                        .update(b || new Buffer(0))
+                        .digest('base64')
+                    ,
+                    'base64'
+                );
+            }
+            
+            Kbuf = Kbuf.length > B ? H(Kbuf) : Kbuf;
+            
+            if (Kbuf.length != B) {
+                var cbuf = new Buffer(B);
+                Kbuf.copy(cbuf, 0);
+                
+                for (var i = cbuf.length; i < B; i++) {
+                    cbuf[i] = 0;
+                }
+                Kbuf = cbuf;
+            }
+            var Ki = bigint.fromBuffer(Kbuf);
+            
+            var ipadBuf = new Buffer(B);
+            var opadBuf = new Buffer(B);
+            for (var i = 0; i < B; i++) {
+                ipadBuf[i] = 0x36;
+                opadBuf[i] = 0x5c;
+            }
+            var ipad = bigint.fromBuffer(ipadBuf);
+            var opad = bigint.fromBuffer(opadBuf);
+            
+            var text = Put()
+                .word32be(seqNum)
+                .put(buf)
+                .buffer()
+            ;
+            
+            var hbuf = H(
+                Ki.xor(opad).toBuffer(),
+                H(Ki.xor(ipad).toBuffer(), text)
+            );
+            console.log('H = ' + hbuf.inspect());
+            console.log('b = ' + b.inspect());
+            
+            seqNum = (seqNum + 1) % Math.pow(256, 4);
+            //return Put().word32be(b.length).put(b).buffer();
+            return Put().word32be(hbuf.length).put(hbuf).buffer();
         },
     };
 };
